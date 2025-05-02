@@ -1,0 +1,29 @@
+stages:
+  - build
+  - test
+
+.build-workflow:
+  rules:
+    - if: '$WORKFLOW == "build"'
+    - when: never
+
+build:
+  extends: .build-workflow
+  stage: build
+  tags:
+    # https://gitlab.com/gitlab-org/ci-cd/shared-runners/images/gcp/windows-containers/-/blob/main/cookbooks/preinstalled-software/attributes/default.rb
+    # https://community.chocolatey.org/packages/visualstudio2022buildtools/117.8.0.0
+    # not working for this project as GitLab runner does not have .NET Framework v3.5
+    # use this to add msbuild to Path - $Env:Path += ";C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin"
+    # - saas-windows-medium-amd64
+    - msbuild
+    - selfhosted
+    - shell
+  before_script:
+    - >
+      (dir 2>&1 *`|echo CMD);&<# rem #>echo ($PSVersionTable).PSEdition
+      # Returns one of: CMD, Core, Desktop
+    # - '& "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\Common7\\Tools\\Launch-VsDevShell.ps1"' 
+    - msbuild -version
+  script:
+    - msbuild WebGoat.NET.sln /t:Rebuild /p:Configuration=Debug

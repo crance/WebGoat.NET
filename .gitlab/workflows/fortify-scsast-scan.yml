@@ -1,0 +1,28 @@
+stages:
+  - test
+
+variables:
+  FORTIFY_BUILD_ID: "webgoat_net"
+  SSC_APP_NAME: "webgoat.net"
+  SSC_APP_VER_NAME: "scsast_remotescan"
+
+fortify-sast:
+  stage: test
+  tags:
+    - msbuild
+    - selfhosted
+    - shell
+  script: 
+    - sourceanalyzer -b "$FORTIFY_BUILD_ID" -project-root ".fortify" -debug -verbose msbuild WebGoat.NET.sln /t:Rebuild  /p:Configuration=Debug 
+    - >
+      scancentral -url "$SCSAST_URL/scancentral-ctrl" -ssctoken "$SSC_TOKEN" start 
+      -upload 
+      -application "$SSC_APP_NAME" -version "$SSC_APP_VER_NAME" 
+      -projroot ".fortify" 
+      -uptoken "$SSC_TOKEN" 
+      -b "$FORTIFY_BUILD_ID" 
+      -scan 
+  artifacts:
+    paths:
+      - ".fortify"
+    expire_in: 1 week

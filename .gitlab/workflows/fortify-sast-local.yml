@@ -1,0 +1,32 @@
+stages:
+  - test
+
+variables:
+  FORTIFY_BUILD_ID: "webgoat_net"
+  SSC_APP_NAME: "webgoat.net"
+  SSC_APP_VER_NAME: "master"
+
+fortify-sast:
+  stage: test
+  tags:
+    - msbuild
+    - selfhosted
+    - shell
+  before_script:
+    - fortifyupdate -url "$FORTIFY_UPDATE_URL" -acceptKey -acceptSSLCertificate
+  script: 
+    - sourceanalyzer -b "$FORTIFY_BUILD_ID" -project-root ".fortify" -debug -verbose msbuild WebGoat.NET.sln /t:Rebuild  /p:Configuration=Debug 
+    - > 
+      sourceanalyzer -b "$FORTIFY_BUILD_ID" 
+      -project-root ".fortify" 
+      -debug -verbose 
+      -scan -f "$FORTIFY_BUILD_ID.fpr"
+    - >
+      fortifyclient -url "$SSC_URL" -authtoken "$SSC_TOKEN" 
+      uploadFPR -file "$FORTIFY_BUILD_ID.fpr" 
+      -project "$SSC_APP_NAME" -version "$SSC_APP_VER_NAME"
+  artifacts:
+    paths:
+      - ".fortify"
+      - "*.fpr"
+    expire_in: 1 week

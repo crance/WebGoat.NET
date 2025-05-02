@@ -1,0 +1,45 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'      # Triggers when using the GitLab UI "Run Pipeline" button
+    - if: '$CI_PIPELINE_SOURCE == "api"'      # Triggers when using the GitLab API
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'  # Triggers when using pipeline triggers
+    - when: never   
+
+variables:
+  WORKFLOW:
+    value: "build"
+    options:
+      - "build"
+      - "fod"
+      - "fortify-scsast-translate"
+      - "fortify-scsast-scan"
+      - "fortify-sast-local"
+      - "native"
+    description: "Select the workflow to run"
+
+stages:
+  - build
+  - test
+
+include:
+  - local: '.gitlab/workflows/build.yml'
+  - local: '.gitlab/workflows/gitlab-sast.yml'
+    rules:
+      - if: '$WORKFLOW == "native"'
+      - when: never
+  - local: '.gitlab/workflows/fod.yml'
+    rules:
+      - if: '$WORKFLOW == "fod"'
+      - when: never
+  - local: '.gitlab/workflows/fortify-sast-local.yml'
+    rules:
+      - if: '$WORKFLOW == "fortify-sast-local"'
+      - when: never
+  - local: '.gitlab/workflows/fortify-scsast-translate.yml'
+    rules:
+      - if: '$WORKFLOW == "fortify-scsast-translate"'
+      - when: never
+  - local: '.gitlab/workflows/fortify-scsast-scan.yml'
+    rules:
+      - if: '$WORKFLOW == "fortify-scsast-scan"'
+      - when: never
