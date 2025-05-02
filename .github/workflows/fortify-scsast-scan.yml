@@ -1,0 +1,29 @@
+name: "Fortify SCSAST (Remote Scan)"
+
+on: 
+  workflow_dispatch:
+env:
+  FORTIFY_BUILD_ID: "webgoat_net"
+  SSC_APP_NAME: "webgoat.net"
+  SSC_APP_VER_NAME: "scsast_remotescan"
+
+jobs:
+  sast:
+    runs-on: self-hosted
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Fortify SAST Assessment
+        run: |
+          sourceanalyzer -b "${{env.FORTIFY_BUILD_ID}}" -project-root ".fortify" -debug -verbose -logfile trans.log msbuild WebGoat.NET.sln /t:Rebuild  /p:Configuration=Debug 
+          scancentral -sscurl "${{secrets.SSC_URL}}" -ssctoken "${{secrets.SSC_TOKEN}}" start -upload -application "${{env.SSC_APP_NAME}}" -version "${{env.SSC_APP_VER_NAME}}" -projroot ".fortify" -uptoken "${{secrets.SSC_TOKEN}}" -b "${{env.FORTIFY_BUILD_ID}}" -scan 
+      - name: Save Fortify Logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+            name: fortify-logs
+            path: |
+              *.log
+              .fortify
+            retention-days: 7

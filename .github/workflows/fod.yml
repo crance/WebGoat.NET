@@ -1,0 +1,48 @@
+# Use the generic fortify/github-action to submit FoD scans.
+# If granular controls are required, use the following to setup the use shell commands to call scancentral and fodupload
+# - fortify/github-action/setup@v1
+# 
+# Details of the tools definitions can be found in:
+# - https://github.com/fortify/github-action/blob/main/setup/src/constants.ts
+# - https://github.com/fortify/tool-definitions/tree/main/v1
+# 
+# If tools are needed to be hosted in airgap environment, provide the tools definition file via `TOOL_DEFINITIONS` variable when using `fortify/github-action`.
+# A sample of the tools definition file can be found in:
+# - https://github.com/fortify/tool-definitions/releases/download/v1/tool-definitions.yaml.zip
+
+name: "Fortify on Demand"
+
+on: 
+  workflow_dispatch:
+env:
+  FOD_RELEASE_ID: 1459873
+  FOD_UPLOADER_NOTES: "Triggered by GitHub"
+
+jobs:
+  sast:
+    # https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md
+    runs-on: windows-2022
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: FoD SAST Assessment
+        uses: fortify/github-action@v2
+        with:
+          sast-scan: true
+          debricked-sca-scan: true
+        env:
+          FOD_URL: ${{vars.FOD_PORTAL_URL}}
+          FOD_CLIENT_ID: ${{secrets.FOD_API_KEY}}
+          FOD_CLIENT_SECRET: ${{secrets.FOD_API_SECRET}}
+          FOD_RELEASE: ${{env.FOD_RELEASE_ID}}
+          # FOD_RELEASE: MyApp:MyRelease
+          EXTRA_PACKAGE_OPTS: -oss
+          # EXTRA_PACKAGE_OPTS:  -exclude ".gitlab"
+          FOD_SAST_SCAN_EXTRA_OPTS: --notes="${{env.FOD_UPLOADER_NOTES}}"
+          # DO_WAIT: true
+          # DO_EXPORT: true
+          DO_PACKAGE_DEBUG: true

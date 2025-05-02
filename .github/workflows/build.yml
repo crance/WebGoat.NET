@@ -1,0 +1,24 @@
+name: "Compile Application"
+
+on: 
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+      - name: Verify Build Tools
+        run: |
+          (dir 2>&1 *`|echo CMD);&<# rem #>echo ($PSVersionTable).PSEdition 
+          # Returns one of: CMD, Core, Desktop 
+          msbuild -version 
+
+      - name: Build using msbuild
+        run: msbuild WebGoat.NET.sln /t:Rebuild /p:Configuration=Debug 

@@ -1,0 +1,59 @@
+name: GitLab - Mirror Branch
+
+on:
+  push:
+    branches:
+      - "**"  # Listen to every push, including branch deletions
+
+jobs:
+  mirror_branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log push event data
+        run: |
+          echo "GitHub event name: ${{ github.event_name }}"
+          echo "Branch ref: ${{ github.event.ref }}"
+          echo "Deleted flag: ${{ github.event.deleted }}"
+
+      - name: Get GitLab Project ID
+        run: |
+          RESPONSE=$(curl --silent --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+            "https://gitlab.com/api/v4/search?scope=projects&search=${{ vars.GITLAB_REPO }}")
+          echo "GitLab API Response: $RESPONSE"
+          PROJECT_ID=$(echo "$RESPONSE" | jq -r 'if type=="array" then .[0].id else .id end')
+          echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+          if [ "$PROJECT_ID" = "null" ]; then
+            echo "Error: Could not retrieve Project ID. Check token permissions."
+            exit 1
+          fi
+
+      - name: Delete branch in GitLab on push deletion
+        if: ${{ github.event.deleted == true && github.event.ref != 'refs/heads/main' }}
+        run: |
+          BRANCH_NAME=${{ github.event.ref }}
+          ENCODED_BRANCH_NAME=$(jq -nr --arg branch "$BRANCH_NAME" '$branch | @uri')
+          echo "Branch deletion detected from push. Deleting branch '$BRANCH_NAME' from GitLab..."
+          RESPONSE=$(curl --silent --request DELETE \
+            --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+            --write-out "%{http_code}" --output /dev/null \
+            "https://gitlab.com/api/v4/projects/${{ env.PROJECT_ID }}/repository/branches/${ENCODED_BRANCH_NAME}")
+          echo "GitLab deletion response code: $RESPONSE"
+          if [ "$RESPONSE" != "204" ]; then
+            echo "Error: Failed to delete branch '$BRANCH_NAME' from GitLab."
+            exit 1
+          fi
+
+      - name: Checkout repository for mirror update
+        if: ${{ github.event.deleted != true }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mirror branch update to GitLab
+        if: ${{ github.event.deleted != true }}
+        run: |
+          # Add GitLab remote using the OAuth token in the URL
+          git remote add gitlab "https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/${{ vars.GITLAB_REPO }}.git"
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "Pushing branch '$CURRENT_BRANCH' to GitLab..."
+          git push -f gitlab $CURRENT_BRANCH
