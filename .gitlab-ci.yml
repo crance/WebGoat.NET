@@ -14,6 +14,7 @@ variables:
       - "fortify-scsast-translate"
       - "fortify-scsast-scan"
       - "fortify-sast-local"
+      - "aviator"
       - "debricked"
       - "sonatype"
       - "native"
@@ -52,4 +53,8 @@ include:
   - local: '.gitlab/workflows/sonatype.yml'
     rules:
       - if: '$WORKFLOW == "sonatype"'
+      - when: never
+  - local: '.gitlab/workflows/fortify-aviator.yml'
+    rules:
+      - if: '$WORKFLOW == "aviator"'
       - when: never

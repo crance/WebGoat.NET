@@ -1,0 +1,52 @@
+name: "Fortify SAST"
+
+on: 
+  workflow_dispatch:
+env:
+  FORTIFY_BUILD_ID: "webgoat_net"
+  SSC_APP_NAME: "webgoat.net"
+  SSC_APP_VER_NAME: "aviator"
+
+jobs:
+  sast:
+    # https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md
+    runs-on: windows-2022
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Fortify SAST Assessment
+        uses: fortify/github-action@v2
+        with:
+          sast-scan: true
+        env:
+          SSC_URL: ${{secrets.SSC_URL}}
+          SSC_TOKEN: ${{secrets.SSC_TOKEN}}
+          SC_SAST_TOKEN: ${{secrets.CLIENT_AUTH_TOKEN}}
+          SSC_APPVERSION: "${{env.SSC_APP_NAME}}:${{env.SSC_APP_VER_NAME}}"
+          # PACKAGE_EXTRA_OPTS: -exclude ".gitlab" 
+          SC_SAST_SENSOR_VERSION: 24.4
+          DO_WAIT: true
+
+  aviator:
+    needs: sast
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup FCLI
+        uses: fortify/github-action/setup@v2
+        with:
+          export-path: true
+          fcli: latest
+
+      - name: Send for Audit
+        run: |
+          fcli ssc session login \
+          --token "${{secrets.SSC_TOKEN}}" \
+          --url "${{secrets.SSC_URL}}" 
+          fcli aviator ssc audit \
+          --app ${{env.SSC_APP_NAME}} \
+          --appversion "${{env.SSC_APP_NAME}}:${{env.SSC_APP_VER_NAME}}" 
+          fcli ssc session logout

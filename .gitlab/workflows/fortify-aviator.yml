@@ -1,0 +1,55 @@
+stages:
+  - test
+
+variables:
+  FORTIFY_BUILD_ID: "webgoat_net"
+  SSC_APP_NAME: "webgoat.net"
+  SSC_APP_VER_NAME: "aviator"
+
+fortify-sast:
+  stage: test
+  tags:
+    - msbuild
+    - selfhosted
+    - shell
+  before_script:
+    - mkdir .fortify
+  script: 
+    - scancentral package -o package.zip 
+  artifacts:
+    paths:
+      - "package.zip"
+    expire_in: 1 week
+
+fortify-upload:
+  stage: test
+  image: fortifydocker/fortify-ci-tools:7-jdk-21
+  needs: ['fortify-sast']
+  script: 
+    - >
+      fcli ssc session login 
+      --token "$SSC_TOKEN" 
+      --client-auth-token "$CLIENT_AUTH_TOKEN"
+      --url "$SSC_URL" 
+    - > 
+      fcli sc-sast scan start 
+      --file package.zip 
+      --publish-to "$SSC_APP_NAME:$SSC_APP_VER_NAME" 
+      --sensor-version 24.4 
+      --store jobtoken 
+    - fcli sc-sast scan wait-for ::jobtoken::
+    - fcli ssc session logout
+
+fortify-aviator:
+  stage: test
+  image: fortifydocker/fortify-ci-tools:7-jdk-21
+  needs: ['fortify-upload']
+  script: 
+    - >
+      fcli ssc session login 
+      --token "$SSC_TOKEN" 
+      --url "$SSC_URL" 
+    - > 
+      fcli aviator ssc audit 
+      --app "$SSC_APP_NAME" --appversion "$SSC_APP_NAME:$SSC_APP_VER_NAME" 
+    - fcli ssc session logout
