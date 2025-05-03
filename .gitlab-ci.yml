@@ -15,6 +15,7 @@ variables:
       - "fortify-scsast-scan"
       - "fortify-sast-local"
       - "native"
+      - "debricked"
     description: "Select the workflow to run"
 
 stages:
@@ -42,4 +43,8 @@ include:
   - local: '.gitlab/workflows/fortify-scsast-scan.yml'
     rules:
       - if: '$WORKFLOW == "fortify-scsast-scan"'
+      - when: never
+  - local: '.gitlab/workflows/debricked.yml'
+    rules:
+      - if: '$WORKFLOW == "debricked"'
       - when: never

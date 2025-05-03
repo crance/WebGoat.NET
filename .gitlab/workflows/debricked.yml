@@ -1,0 +1,29 @@
+stages:
+  - test
+
+variables:
+  SSC_APP_NAME: "webgoat.net"
+  SSC_APP_VER_NAME: "master"
+
+debricked:
+  stage: test
+  image: debricked/cli:2-resolution
+  script:
+    - curl -LsS https://github.com/debricked/cli/releases/download/release-v2/cli_linux_x86_64.tar.gz | tar -xz debricked
+    - ./debricked scan
+
+debricked-ssc:
+  stage: test
+  image: fortifydocker/fortify-ci-tools:7-jdk-21
+  needs: ['debricked']
+  script:
+    - >
+      fcli ssc session login 
+      --token "$SSC_TOKEN" 
+      --url "$SSC_URL" 
+    - >
+      fcli ssc artifact import-debricked 
+      --appversion "$SSC_APP_NAME:$SSC_APP_VER_NAME" 
+      --branch $CI_COMMIT_REF_NAME 
+      --repository $CI_PROJECT_PATH 
+      --debricked-access-token "$DEBRICKED_TOKEN"

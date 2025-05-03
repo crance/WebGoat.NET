@@ -1,0 +1,35 @@
+name: Debricked
+
+on: 
+    workflow_dispatch:
+
+env:
+  SSC_APP_NAME: "webgoat.net"
+  SSC_APP_VER_NAME: "master"
+
+jobs:
+  debricked-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Debricked SCA Assessment
+        uses: debricked/actions@v4
+        env:
+          DEBRICKED_TOKEN: ${{ secrets.DEBRICKED_TOKEN }}
+      - name: Setup FCLI
+        uses: fortify/github-action/setup@v2
+        with:
+          export-path: true
+          fcli: latest
+      - name: Upload to SSC
+        run: |
+          fcli ssc session login \
+          --token "${{secrets.SSC_TOKEN}}" \
+          --url "${{secrets.SSC_URL}}" 
+          fcli ssc artifact import-debricked \
+          --appversion "${{env.SSC_APP_NAME}}:${{env.SSC_APP_VER_NAME}}" \
+          --branch ${{github.ref_name}} \
+          --repository ${{github.repository}} \
+          --debricked-access-token "${{ secrets.DEBRICKED_TOKEN }}"
