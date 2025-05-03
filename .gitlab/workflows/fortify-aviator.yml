@@ -37,7 +37,7 @@ fortify-upload:
       --publish-to "$SSC_APP_NAME:$SSC_APP_VER_NAME" 
       --sensor-version 24.4 
       --store jobtoken 
-    - fcli sc-sast scan wait-for ::jobtoken::
+    - 'fcli sc-sast scan wait-for ::jobtoken::'
     - fcli ssc session logout
 
 fortify-aviator:
