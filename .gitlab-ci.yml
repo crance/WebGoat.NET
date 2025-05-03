@@ -14,8 +14,9 @@ variables:
       - "fortify-scsast-translate"
       - "fortify-scsast-scan"
       - "fortify-sast-local"
-      - "native"
       - "debricked"
+      - "sonatype"
+      - "native"
     description: "Select the workflow to run"
 
 stages:
@@ -34,11 +35,11 @@ include:
       - when: never
   - local: '.gitlab/workflows/fortify-sast-local.yml'
     rules:
-      - if: '$WORKFLOW == "fortify-sast-local"'
+      - if: '$WORKFLOW == "fortify-sast-local" || $WORKFLOW == "local"'
       - when: never
   - local: '.gitlab/workflows/fortify-scsast-translate.yml'
     rules:
-      - if: '$WORKFLOW == "fortify-scsast-translate"'
+      - if: '$WORKFLOW == "fortify-scsast-translate" || $WORKFLOW == "scsast"'
       - when: never
   - local: '.gitlab/workflows/fortify-scsast-scan.yml'
     rules:
@@ -47,4 +48,8 @@ include:
   - local: '.gitlab/workflows/debricked.yml'
     rules:
       - if: '$WORKFLOW == "debricked"'
+      - when: never
+  - local: '.gitlab/workflows/sonatype.yml'
+    rules:
+      - if: '$WORKFLOW == "sonatype"'
       - when: never

@@ -1,0 +1,48 @@
+name: Sonatype
+
+on: 
+    workflow_dispatch:
+
+env:
+  SSC_APP_NAME: "webgoat.net"
+  SSC_APP_VER_NAME: "sonatype"
+
+  NEXUSIQ_APPID: "webgoat.net"
+  NEXUSIQ_STAGE: "build"
+
+jobs:
+  sonatype-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Sonatype SCA Assessment
+        id: evaluate
+        uses: sonatype/actions/evaluate@v1
+        with:
+          iq-server-url: ${{ secrets.NEXUS_IQ_URL }}
+          username: ${{ secrets.NEXUS_IQ_USERNAME }}
+          password: ${{ secrets.NEXUS_IQ_PASSWORD }}
+          application-id: ${{ env.NEXUSIQ_APPID }}
+          scan-targets: .
+          result-file: evaluation-result
+      - name: Fetch SBOM
+        uses: sonatype/actions/fetch-sbom@v1
+        if: ( success() || failure() ) && steps.evaluate.outputs.scan-id 
+        with:
+          iq-server-url: ${{ secrets.NEXUS_IQ_URL }}
+          username: ${{ secrets.NEXUS_IQ_USERNAME }}
+          password: ${{ secrets.NEXUS_IQ_PASSWORD }}
+          application-id: ${{ env.NEXUSIQ_APPID }}
+          scan-id: ${{ steps.evaluate.outputs.scan-id }}
+          sbom-standard: cyclonedx
+          sbom-version: 1.6
+          artifact-name: sbom
+  sonatype-ssc:
+    needs: sonatype-cli
+    runs-on: self-hosted
+    steps:
+      - name: Upload to SSC
+        run: |
+          Invoke-WebRequest -UseBasicParsing -Uri "${{ secrets.FORTIFY_SONATYPE_INTEGRATION_SERVICE_URL }}/startScanLoad?sonatypeProject=${{ env.NEXUSIQ_APPID }}&sonatypeProjectStage=${{ env.NEXUSIQ_STAGE }}&fortifyApplication=${{ env.SSC_APP_NAME }}&fortifyApplicationVersion=${{ env.SSC_APP_VER_NAME }}&forceUpload=true&overwrite=true"
