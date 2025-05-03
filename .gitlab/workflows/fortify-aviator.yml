@@ -50,6 +50,10 @@ fortify-aviator:
       --token "$SSC_TOKEN" 
       --url "$SSC_URL" 
     - > 
+      fcli aviator session login 
+      --token "$AVIATOR_TOKEN" 
+      --url "$AVIATOR_URL" 
+    - > 
       fcli aviator ssc audit 
       --app "$SSC_APP_NAME" --appversion "$SSC_APP_NAME:$SSC_APP_VER_NAME" 
     - fcli ssc session logout
