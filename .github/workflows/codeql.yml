@@ -95,3 +95,21 @@ jobs:
       uses: github/codeql-action/analyze@v3
       with:
         category: "/language:${{matrix.language}}"
+        output: sarif-results
+
+    - name: Upload SARIF as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: sarif-results-${{matrix.language}}
+        path: sarif-results/*.sarif
+        retention-days: 7
+
+  process-sarif:
+    name: Process Sarif
+    needs: analyze
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download SARIF results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-sarif-result
