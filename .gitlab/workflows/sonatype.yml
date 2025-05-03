@@ -1,0 +1,63 @@
+stages:
+  - test
+
+variables:
+  SSC_APP_NAME: "webgoat.net"
+  SSC_APP_VER_NAME: "sonatype"
+
+  NEXUSIQ_APPID: "webgoat.net"
+  NEXUSIQ_STAGE: "build"
+
+# https://gitlab.com/explore/catalog/sonatype-integrations/components
+include:
+  - component: $CI_SERVER_FQDN/sonatype-integrations/components/evaluate-sbom@1.1.0
+    inputs:
+      application-id: $NEXUSIQ_APPID
+      scan-targets:
+        - .
+      result-file: evaluation-result.json
+      report-name: evaluation-result.html
+      sbom-standard: cycloneDx
+      sbom-version: "1.6"
+      ci-stage: "test"
+
+sonatype-ssc:
+  stage: test
+  image: curlimages/curl
+  needs: ['sonatype-evaluation']
+  tags:
+    - selfhosted
+    - docker
+  script:
+    - curl "${FORTIFY_SONATYPE_INTEGRATION_SERVICE_URL}/startScanLoad?sonatypeProject=${NEXUSIQ_APPID}&sonatypeProjectStage=${NEXUSIQ_STAGE}&fortifyApplication=${SSC_APP_NAME}&fortifyApplicationVersion=${SSC_APP_VER_NAME}&forceUpload=true&overwrite=true"
+
+# sonatype-cli:
+#   stage: test
+#   image: sonatype/gitlab-nexus-iq-pipeline:2.4.1-01
+#   script:
+#     - /sonatype/evaluate -i $NEXUSIQ_APPID --stage ${NEXUSIQ_STAGE} .
+#     - echo "NEXUS_IQ_SCAN_ID ${NEXUS_IQ_SCAN_ID}"
+#   artifacts:
+#     name: "policy-eval-$CI_JOB_NAME-$CI_COMMIT_REF_NAME"
+#     when: always
+#     paths:
+#       - "${NEXUSIQ_APPID}-policy-eval-report.html"
+#     expire_in: 1 week
+
+# sonatype-download-sbom:
+#   stage: test
+#   image: sonatype/gitlab-nexus-iq-pipeline:2.4.1-01
+#   script:
+#     - echo "NEXUS_IQ_SCAN_ID ${NEXUS_IQ_SCAN_ID}"
+#     - >
+#       /sonatype/fetch-sbom -i $NEXUSIQ_APPID -si ${NEXUS_IQ_SCAN_ID} 
+#       -ss cycloneDx -sv 1.6 
+#       -sf json 
+#       -n sbom.cdx.json -udl
+#   artifacts:
+#     name: "cyclonedx"
+#     when: always
+#     paths:
+#       - "sbom.cdx.json"
+#     expire_in: 1 week
+
