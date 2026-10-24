@@ -1,0 +1,70 @@
+name: Build - .NET Framework
+
+on:
+  push:
+    branches: [appsec-demo]
+  pull_request:
+    branches: [appsec-demo]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inspect environment
+        run: |
+          # Returns one of: CMD, Core, Desktop
+          (dir 2>&1 *`|echo CMD);&<# rem #>echo ($PSVersionTable).PSEdition
+
+      - name: Verify .NET Framework 3.5
+        shell: pwsh
+        run: |
+          $referencePath = "${env:ProgramFiles(x86)}\Reference Assemblies\Microsoft\Framework\v3.5"
+          $frameworkList = Join-Path $referencePath "RedistList\FrameworkList.xml"
+
+          Write-Host "Checking .NET Framework 3.5 reference assemblies..."
+          Write-Host "Path: $referencePath"
+
+          if (-not (Test-Path $frameworkList -PathType Leaf)) { 
+            throw ".NET Framework 3.5 reference assembly manifest not found."
+          }
+            
+          Write-Host ".NET Framework 3.5 reference assembly manifest found."
+
+      - name: Discover MSBuild
+        id: msbuild
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $path = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" |
+            Select-Object -First 1
+
+          if (-not $path) {
+            throw "MSBuild not found"
+          }
+
+          "path=$path" >> $env:GITHUB_OUTPUT
+          & $path -version
+
+      - name: Build
+        shell: pwsh
+        env:
+          MSBUILD_PATH: ${{ steps.msbuild.outputs.path }}
+        run: |
+          & $env:MSBUILD_PATH `
+            WebGoat.NET.sln `
+            /t:Rebuild `
+            /p:Configuration=Debug `
+            /p:Platform="Any CPU" 
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSBuild failed with exit code $LASTEXITCODE"
+          }
