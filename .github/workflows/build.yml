@@ -2,7 +2,12 @@ name: Build - .NET Framework
 
 on:
   push:
-    branches: [appsec-demo]
+    branches:
+      - appsec-demo
+      - "test/**"
+    paths-ignore:
+      - "appsec/**"
+      - ".github/README.md"
   pull_request:
     branches: [appsec-demo]
   workflow_dispatch:
@@ -21,6 +26,9 @@ jobs:
 
       - name: Inspect environment
         run: |
+          # In GitHub-hosted Windows runners, the default shell is PowerShell Core (pwsh), so it should return `Core`.
+          # Can be use to inspect the runner environment if we switch to `self-hosted`.
+          # 
           # Returns one of: CMD, Core, Desktop
           (dir 2>&1 *`|echo CMD);&<# rem #>echo ($PSVersionTable).PSEdition
 
@@ -39,28 +47,17 @@ jobs:
             
           Write-Host ".NET Framework 3.5 reference assembly manifest found."
 
-      - name: Discover MSBuild
-        id: msbuild
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Show MSBuild version
         shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $path = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" |
-            Select-Object -First 1
-
-          if (-not $path) {
-            throw "MSBuild not found"
-          }
-
-          "path=$path" >> $env:GITHUB_OUTPUT
-          & $path -version
+        run: msbuild -version
 
       - name: Build
         shell: pwsh
-        env:
-          MSBUILD_PATH: ${{ steps.msbuild.outputs.path }}
         run: |
-          & $env:MSBUILD_PATH `
-            WebGoat.NET.sln `
+          msbuild WebGoat.NET.sln `
             /t:Rebuild `
             /p:Configuration=Debug `
             /p:Platform="Any CPU" 
