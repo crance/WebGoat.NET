@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - appsec-demo
-      - "test/**"
     paths-ignore:
       - "appsec/**"
       - ".github/README.md"
