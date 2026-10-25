@@ -1,0 +1,53 @@
+name: AST - Fortify on Demand
+
+on:
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: "Select scan type"
+        required: true
+        type: choice
+        default: sast
+        options:
+          - sast
+          - dast
+env:
+  FOD_RELEASE_ID: "WebGoat.NET:GitHub"
+  FOD_UPLOADER_NOTES: "Triggered by GitHub"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: FoD SAST Assessment
+        if: inputs.scan_type == 'sast'
+        uses: fortify/github-action@v3
+        env:
+          FOD_URL: ${{ vars.FOD_URL }}
+          FOD_CLIENT_ID: ${{ secrets.FOD_CLIENT_ID }}
+          FOD_CLIENT_SECRET: ${{ secrets.FOD_CLIENT_SECRET }}
+          FOD_RELEASE: ${{ env.FOD_RELEASE_ID }}
+
+          DO_SCA_SCAN: true
+          DO_AVIATOR_AUDIT: true
+          DO_CHECK_POLICY: true
+
+          SC_CLIENT_VERSION: 26.2.1
+
+          SAST_SCAN_EXTRA_OPTS: --notes="${{env.FOD_UPLOADER_NOTES}}"
+
+      - name: FoD DAST Assessment
+        if: inputs.scan_type == 'dast'
+        run: |
+          echo "Running FoD Dynamic Assessment"
+          # Placeholder Only
