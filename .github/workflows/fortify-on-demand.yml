@@ -11,15 +11,26 @@ on:
         options:
           - sast
           - dast
+      wait:
+        description: "Wait for scan completion"
+        required: true
+        type: choice
+        default: "true"
+        options:
+          - true
+          - false
+
 env:
   FOD_RELEASE_ID: "WebGoat.NET:GitHub"
   FOD_UPLOADER_NOTES: "Triggered by GitHub"
 
 permissions:
   contents: read
+  security-events: write  # Publish SARIF
+
 
 jobs:
-  build:
+   fortify-assessment:
     runs-on: windows-2022
 
     steps:
@@ -42,9 +53,11 @@ jobs:
           DO_AVIATOR_AUDIT: true
           DO_CHECK_POLICY: true
 
+          DO_WAIT: ${{ inputs.wait }}
+
           SC_CLIENT_VERSION: 26.2.1
 
-          SAST_SCAN_EXTRA_OPTS: --notes="${{env.FOD_UPLOADER_NOTES}}"
+          SAST_SCAN_EXTRA_OPTS: '"--notes=${{ env.FOD_UPLOADER_NOTES }}"'
 
       - name: FoD DAST Assessment
         if: inputs.scan_type == 'dast'
