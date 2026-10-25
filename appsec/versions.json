@@ -1,0 +1,10 @@
+
+{
+  "fortify": {
+    "sast": "26.2",
+    "scancentral_client": "26.2.1"
+  },
+  "sonatype": {
+    "iq_cli": "2.16.0"
+  }
+}
