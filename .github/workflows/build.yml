@@ -5,8 +5,8 @@ on:
     branches:
       - appsec-demo
     paths-ignore:
-      - "appsec/**"
-      - ".github/README.md"
+      - "appsec/versions.json"
+      - '**/*.md'
   pull_request:
     branches: [appsec-demo]
   workflow_dispatch:

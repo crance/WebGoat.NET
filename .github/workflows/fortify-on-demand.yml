@@ -1,6 +1,13 @@
 name: AST - Fortify on Demand
 
 on:
+  push:
+    branches:
+      - test/**
+  pull_request:
+    branches: [appsec-demo]
+    paths-ignore:
+      - '**/*.md'
   workflow_dispatch:
     inputs:
       scan_type:
@@ -21,46 +28,52 @@ on:
           - false
 
 env:
-  FOD_RELEASE_ID: "WebGoat.NET:GitHub"
+  FOD_URL: ${{ vars.FOD_URL }}
+  FOD_CLIENT_ID: ${{ secrets.FOD_CLIENT_ID }}
+  FOD_CLIENT_SECRET: ${{ secrets.FOD_CLIENT_SECRET }}
+
+  FOD_RELEASE: "WebGoat.NET:GitHub"
   FOD_UPLOADER_NOTES: "Triggered by GitHub"
 
 permissions:
   contents: read
   security-events: write  # Publish SARIF
 
-
 jobs:
-   fortify-assessment:
+  fortify-assessment:
     runs-on: windows-2022
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve tool versions
+        id: versions
+        run: |
+          $f = (Get-Content appsec/versions.json -Raw | ConvertFrom-Json).fortify
+          "sc_client=$($f.scancentral_client)" >> $env:GITHUB_OUTPUT
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v3
 
       - name: FoD SAST Assessment
-        if: inputs.scan_type == 'sast'
+        if: github.event_name != 'workflow_dispatch' || inputs.scan_type == 'sast'
         uses: fortify/github-action@v3
         env:
-          FOD_URL: ${{ vars.FOD_URL }}
-          FOD_CLIENT_ID: ${{ secrets.FOD_CLIENT_ID }}
-          FOD_CLIENT_SECRET: ${{ secrets.FOD_CLIENT_SECRET }}
-          FOD_RELEASE: ${{ env.FOD_RELEASE_ID }}
-
           DO_SCA_SCAN: true
+          
           DO_AVIATOR_AUDIT: true
-          DO_CHECK_POLICY: true
+          SETUP_EXTRA_OPTS: '"--use-aviator"'
 
-          DO_WAIT: ${{ inputs.wait }}
+          DO_CHECK_POLICY: false
 
-          SC_CLIENT_VERSION: 26.2.1
-
+          SC_CLIENT_VERSION: ${{ steps.versions.outputs.sc_client }}
           SAST_SCAN_EXTRA_OPTS: '"--notes=${{ env.FOD_UPLOADER_NOTES }}"'
 
+          DO_WAIT: ${{ inputs.wait || 'true' }}
+
       - name: FoD DAST Assessment
-        if: inputs.scan_type == 'dast'
+        if: github.event_name == 'workflow_dispatch' && inputs.scan_type == 'dast'
         run: |
           echo "Running FoD Dynamic Assessment"
           # Placeholder Only
