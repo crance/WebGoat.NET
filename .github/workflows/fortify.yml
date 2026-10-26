@@ -37,9 +37,7 @@ on:
           - false
 
 env:
-  SSC_URL: ${{ vars.SSC_URL }}
-  SSC_TOKEN: ${{ secrets.SSC_TOKEN }}
-  SC_SAST_TOKEN: ${{ secrets.SC_SAST_TOKEN }}
+  SSC_URL: ${{ secrets.SSC_URL }}
 
   SSC_APPVERSION: "WebGoat.NET:${{ inputs.scan_type || 'sc-sast' }}"
 
@@ -51,6 +49,7 @@ permissions:
   security-events: write  # Publish SARIF
 
 jobs:
+  # Single job so every dispatch mode is reachable; step-level conditions select the work.
   fortify-assessment:
     runs-on: windows-2022
 
@@ -64,25 +63,149 @@ jobs:
           $f = (Get-Content appsec/versions.json -Raw | ConvertFrom-Json).fortify
           "sc_client=$($f.scancentral_client)" >> $env:GITHUB_OUTPUT
           "sast=$($f.sast)" >> $env:GITHUB_OUTPUT
+          "sast_sha256=$($f.sast_sha256)" >> $env:GITHUB_OUTPUT
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v3
 
+      # TODO: Change ScanCentral Controller's setting to expose public SSC URL
       - name: Fortify SC-SAST Assessment
-        if: github.event_name != 'workflow_dispatch' || inputs.scan_type == 'sc-sast'
+        if: (inputs.scan_type || 'sc-sast') == 'sc-sast'
         uses: fortify/github-action@v3
         env:
+          SSC_TOKEN: ${{ secrets.SSC_TOKEN }}
+          SC_SAST_TOKEN: ${{ secrets.SC_SAST_TOKEN }}
           DO_AVIATOR_AUDIT: ${{ inputs.audit || 'false' }}
           AVIATOR_AUDIT_EXTRA_OPTS: '"--folder=Critical,High"'
-          
+
           DO_CHECK_POLICY: false
 
           SC_CLIENT_VERSION: ${{ steps.versions.outputs.sc_client }}
 
           # Overrides ScanCentral SAST Controller URL configured in SSC
-          SSC_LOGIN_EXTRA_OPTS: '"--sc-sast-url=${{ vars.SC_SAST_URL }}"'
+          SSC_LOGIN_EXTRA_OPTS: '"--sc-sast-url=${{ secrets.SC_SAST_URL }}"'
+
+          # Bootstrap new Application Version with required settings. eg: `--issue-template`
+          SETUP_EXTRA_OPTS: '"--issue-template=Prioritized High Risk Issue Template"'
 
           # Match `SC_CLIENT_VERSION` by default, overrride only when needed
           # SAST_SCAN_EXTRA_OPTS: '"--sensor-version=${{ steps.versions.outputs.sast }}"'
 
           DO_WAIT: ${{ inputs.wait || 'true' }}
+
+      # Fortify installation is opt-in and only runs on manual dispatches for local translate or local scan.
+      - name: Install Fortify SAST
+        if: inputs.scan_type == 'sc-sast-local-translate' || inputs.scan_type == 'local'
+        timeout-minutes: 30
+        env:
+          SAST_VERSION: ${{ steps.versions.outputs.sast }}
+          # Nexus base URL only; the repository name is selected separately.
+          NEXUS_REPOSITORY_URL: ${{ secrets.NEXUS_REPOSITORY_URL }}
+          NEXUS_INSTALLER_REPOSITORY: ${{ vars.NEXUS_INSTALLER_REPOSITORY || 'software-installers' }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+          SAST_INSTALLER_SHA256: ${{ steps.versions.outputs.sast_sha256 }}
+          FORTIFY_LICENSE: ${{ secrets.FORTIFY_LICENSE }}
+          # Optional: JSON object containing download request headers.
+          S3_HTTP_HEADERS: ${{ secrets.S3_HTTP_HEADERS }}
+        shell: pwsh
+        run: ./scripts/install-fortify-sast.ps1
+
+      - name: Fortify Translate
+        id: translate
+        if: inputs.scan_type == 'sc-sast-local-translate' || inputs.scan_type == 'local'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          $buildId = "WebGoatNET-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $buildDir = Join-Path $env:RUNNER_TEMP 'fortify-build'
+          New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
+
+          sourceanalyzer -b $buildId -project-root $buildDir -clean
+
+          sourceanalyzer -b $buildId -project-root $buildDir msbuild WebGoat.NET.sln `
+            /t:Rebuild /p:Configuration=Debug /p:Platform="Any CPU"
+
+          "build_id=$buildId" >> $env:GITHUB_OUTPUT
+          "project_root=$buildDir" >> $env:GITHUB_OUTPUT
+
+      - name: Fortify Export MBS
+        id: export_mbs
+        if: inputs.scan_type == 'sc-sast-local-translate'
+        env:
+          BUILD_ID: ${{ steps.translate.outputs.build_id }}
+          PROJECT_ROOT: ${{ steps.translate.outputs.project_root }}
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $mbs = Join-Path $env:PROJECT_ROOT 'WebGoatNET.mbs'
+
+          sourceanalyzer -b $env:BUILD_ID -project-root $env:PROJECT_ROOT `
+            -Dcom.fortify.sca.MobileBuildSessions=true -export-build-session $mbs
+          "mbs=$mbs" >> $env:GITHUB_OUTPUT
+
+      - name: Fortify SC-SAST (Local Translate) Assessment
+        if: inputs.scan_type == 'sc-sast-local-translate'
+        uses: fortify/github-action@v3
+        env:
+          SSC_TOKEN: ${{ secrets.SSC_TOKEN }}
+          SC_SAST_TOKEN: ${{ secrets.SC_SAST_TOKEN }}
+          DO_AVIATOR_AUDIT: ${{ inputs.audit || 'false' }}
+          AVIATOR_AUDIT_EXTRA_OPTS: '"--folder=Critical,High"'
+
+          DO_CHECK_POLICY: false
+
+          # The MBS is already translated; skip ScanCentral source packaging.
+          USE_PACKAGE: ${{ steps.export_mbs.outputs.mbs }}
+
+          # Overrides ScanCentral SAST Controller URL configured in SSC
+          SSC_LOGIN_EXTRA_OPTS: '"--sc-sast-url=${{ secrets.SC_SAST_URL }}"'
+
+          # Bootstrap new Application Version with required settings. eg: `--issue-template`
+          SETUP_EXTRA_OPTS: '"--issue-template=Prioritized High Risk Issue Template"'
+
+          DO_WAIT: ${{ inputs.wait || 'true' }}
+
+      - name: Fortify Local Scan Assessment
+        id: local_scan
+        if: inputs.scan_type == 'local'
+        env:
+          BUILD_ID: ${{ steps.translate.outputs.build_id }}
+          PROJECT_ROOT: ${{ steps.translate.outputs.project_root }}
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $fpr = Join-Path $env:PROJECT_ROOT 'WebGoatNET.fpr'
+
+          sourceanalyzer -b $env:BUILD_ID -project-root $env:PROJECT_ROOT `
+            -scan -f $fpr
+          "fpr=$fpr" >> $env:GITHUB_OUTPUT
+
+      - name: Setup fcli
+        if: inputs.scan_type == 'local'
+        uses: fortify/github-action/setup@v3
+        with:
+          fcli: bootstrapped
+
+      - name: Upload local FPR to SSC
+        if: inputs.scan_type == 'local'
+        env:
+          SSC_TOKEN: ${{ secrets.SSC_TOKEN }}
+          FPR_FILE: ${{ steps.local_scan.outputs.fpr }}
+          DO_WAIT: ${{ inputs.wait || 'true' }}
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          fcli ssc session login --url $env:SSC_URL --token $env:SSC_TOKEN --disable 'sc-sast,sc-dast'
+          try {
+            fcli ssc action run setup-appversion --appversion $env:SSC_APPVERSION `
+              --issue-template 'Prioritized High Risk Issue Template'
+            fcli ssc artifact upload --appversion $env:SSC_APPVERSION --file $env:FPR_FILE --store local_fpr
+            if ($env:DO_WAIT -eq 'true') {
+              fcli ssc artifact wait-for '::local_fpr::id'
+            }
+          } finally {
+            fcli ssc session logout
+          }

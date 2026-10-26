@@ -1,0 +1,4 @@
+fortify_license_path=@LICENSE_PATH@
+install_dir=@INSTALL_DIR@
+update_security_content=1
+update_server=@SSC_URL@
