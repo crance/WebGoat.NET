@@ -1,9 +1,9 @@
 name: AST - Fortify on Demand
 
 on:
-  push:
-    branches:
-      - test/**
+  # push:
+  #   branches:
+  #     - test/**
   pull_request:
     branches: [appsec-demo]
     paths-ignore:

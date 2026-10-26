@@ -1,7 +1,8 @@
 
 {
   "fortify": {
-    "sast": "26.2",
+    "sast": "26.3.0",
+    "sast_sha256": "d73de824e6fc128a89026c841849393660fb59186a1a906a251af885c75bcd3a",
     "scancentral_client": "26.2.1"
   },
   "sonatype": {
