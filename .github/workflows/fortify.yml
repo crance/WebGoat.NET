@@ -1,0 +1,88 @@
+name: AST - Fortify SAST
+
+on:
+  push:
+    branches:
+      - test/**
+  pull_request:
+    branches: [appsec-demo]
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: "Select scan type"
+        required: true
+        type: choice
+        default: sc-sast
+        options:
+          - sc-sast
+          - sc-sast-local-translate
+          - local
+      wait:
+        description: "Wait for scan completion"
+        required: true
+        type: choice
+        default: "true"
+        options:
+          - true
+          - false
+      audit:
+        description: "Audit with Aviator"
+        required: true
+        type: choice
+        default: "false"
+        options:
+          - true
+          - false
+
+env:
+  SSC_URL: ${{ vars.SSC_URL }}
+  SSC_TOKEN: ${{ secrets.SSC_TOKEN }}
+  SC_SAST_TOKEN: ${{ secrets.SC_SAST_TOKEN }}
+
+  SSC_APPVERSION: "WebGoat.NET:${{ inputs.scan_type || 'sc-sast' }}"
+
+  # Defaults to SSC Application Name
+  # AVIATOR_APP: "myApp"
+
+permissions:
+  contents: read
+  security-events: write  # Publish SARIF
+
+jobs:
+  fortify-assessment:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve tool versions
+        id: versions
+        run: |
+          $f = (Get-Content appsec/versions.json -Raw | ConvertFrom-Json).fortify
+          "sc_client=$($f.scancentral_client)" >> $env:GITHUB_OUTPUT
+          "sast=$($f.sast)" >> $env:GITHUB_OUTPUT
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Fortify SC-SAST Assessment
+        if: github.event_name != 'workflow_dispatch' || inputs.scan_type == 'sc-sast'
+        uses: fortify/github-action@v3
+        env:
+          DO_AVIATOR_AUDIT: ${{ inputs.audit || 'false' }}
+          AVIATOR_AUDIT_EXTRA_OPTS: '"--folder=Critical,High"'
+          
+          DO_CHECK_POLICY: false
+
+          SC_CLIENT_VERSION: ${{ steps.versions.outputs.sc_client }}
+
+          # Overrides ScanCentral SAST Controller URL configured in SSC
+          SSC_LOGIN_EXTRA_OPTS: '"--sc-sast-url=${{ vars.SC_SAST_URL }}"'
+
+          # Match `SC_CLIENT_VERSION` by default, overrride only when needed
+          # SAST_SCAN_EXTRA_OPTS: '"--sensor-version=${{ steps.versions.outputs.sast }}"'
+
+          DO_WAIT: ${{ inputs.wait || 'true' }}

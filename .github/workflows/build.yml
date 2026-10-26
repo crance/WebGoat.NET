@@ -4,10 +4,9 @@ on:
   push:
     branches:
       - appsec-demo
-      - "test/**"
     paths-ignore:
-      - "appsec/**"
-      - ".github/README.md"
+      - "appsec/versions.json"
+      - '**/*.md'
   pull_request:
     branches: [appsec-demo]
   workflow_dispatch:
